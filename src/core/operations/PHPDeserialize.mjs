@@ -156,35 +156,6 @@ class PHPDeserialize extends Operation {
                         return '"' + value + '"';
                     }
                 }
-                case "o": {
-                    expect(":");
-                    const classNameLength = parseInt(readUntil(":"), 10);
-                    expect("\"");
-                    const className = read(classNameLength);
-                    expect("\"");
-                    expect(":");
-                    const propertyCount = parseInt(readUntil(":"), 10);
-                    expect("{");
-                
-                    const obj = {
-                        __className: className
-                    };
-                
-                    for (let i = 0; i < propertyCount; i++) {
-                        const keyRaw = handleInput();
-                        const value = handleInput();
-                
-                        let key = keyRaw;
-                        if (typeof keyRaw === "string" && keyRaw.startsWith('"') && keyRaw.endsWith('"')) {
-                            key = keyRaw.slice(1, -1);
-                        }
-                
-                        obj[key] = value;
-                    }
-                
-                    expect("}");
-                    return JSON.stringify(obj);
-                }
 
                 default:
                     throw new OperationError("Unknown type: " + kind);
