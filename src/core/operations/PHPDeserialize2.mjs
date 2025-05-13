@@ -152,11 +152,27 @@ class PHPDeserialize2 extends Operation {
     
                 case "s": {
                     expect(":");
-                    const length = parseInt(readUntil(":"), 10);
+                    const lengthRaw = readUntil(":").trim();
+                    const length = parseInt(lengthRaw, 10);
                     expect("\"");
-                    const value = read(length);
-                    expect('";');
-                    return record(value);
+
+                    // Read until the next quote-semicolon
+                    let str = "";
+                    while (true) {
+                        const next = read(1);
+                        if (next === '"' && inputPart[0] === ";") {
+                            inputPart.shift(); // Consume the ;
+                            break;
+                        }
+                        str += next;
+                    }
+
+                    const actualByteLength = new TextEncoder().encode(str).length;
+                    if (actualByteLength !== length) {
+                        throw new OperationError(`String length mismatch: expected ${length} bytes, got ${actualByteLength} for string "${str.slice(0, 30)}..."`);
+                    }
+
+                    return record(str);
                 }
     
                 case "o": {
