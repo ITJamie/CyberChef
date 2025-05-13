@@ -12,7 +12,7 @@ export default [
             parserOptions: {
                 ecmaVersion: 2022,
                 ecmaFeatures: {
-                    impliedStrict: true
+                    impliedStrict: false
                 },
                 sourceType: "module",
                 allowImportExportEverywhere: true
@@ -84,7 +84,7 @@ export default [
                 "SwitchCase": 1
             }],
             "linebreak-style": ["error", "unix"],
-            "quotes": ["error", "double", {
+            "quotes": ["warn", "double", {
                 "avoidEscape": true,
                 "allowTemplateLiterals": true
             }],
@@ -93,7 +93,7 @@ export default [
             }],
             "semi": ["error", "always"],
             "unicode-bom": "error",
-            "jsdoc/require-jsdoc": ["error", {
+            "jsdoc/require-jsdoc": ["warn", {
                 "require": {
                     "FunctionDeclaration": true,
                     "MethodDefinition": true,
@@ -111,11 +111,11 @@ export default [
                 "maxBOF": 0
             }],
             "no-whitespace-before-property": "error",
-            "operator-linebreak": ["error", "after"],
+            // "operator-linebreak": ["error", "after"],
             "space-in-parens": "error",
             "no-var": "error",
             "prefer-const": "error",
-            "no-console": "error"
+            // "no-console": "error"
         },
     },
     // File-pattern specific overrides

@@ -39,16 +39,11 @@ class PHPDeserialize2 extends Operation {
      * @returns {string}
      */
     run(input, args) {
-        /**
-         * Recursive method for deserializing.
-         * @returns {*}
-         */
+        const refStore = [];
+        input = input.trim().replace(/\r\n|\r/g, "\n");  // Normalize line endings
+        const inputPart = input.split("");
+
         function handleInput() {
-            /**
-             * Read `length` characters from the input, shifting them out the input.
-             * @param length
-             * @returns {string}
-             */
             function read(length) {
                 let result = "";
                 for (let idx = 0; idx < length; idx++) {
@@ -60,47 +55,53 @@ class PHPDeserialize2 extends Operation {
                 }
                 return result;
             }
-
-            /**
-             * Read characters from the input until `until` is found.
-             * @param until
-             * @returns {string}
-             */
+    
             function readUntil(until) {
                 let result = "";
                 for (;;) {
                     const char = read(1);
-                    if (char === until) {
-                        break;
-                    } else {
-                        result += char;
-                    }
-                }
-                return result;
-
-            }
-
-            /**
-             * Read characters from the input that must be equal to `expect`
-             * @param expect
-             * @returns {string}
-             */
-            function expect(expect) {
-                const result = read(expect.length);
-                if (result !== expect) {
-                    throw new OperationError("Unexpected input found");
+                    if (char === until) break;
+                    result += char;
                 }
                 return result;
             }
+    
+            function expect(expectStr) {
+                const result = read(expectStr.length);
+                if (result !== expectStr) {
+                    throw new OperationError(`Expected "${expectStr}", but got "${result}"`);
+                }
+                return result;
+            }
+    
+            function record(value) {
+                refStore.push(value);
+                return value;
+            }
 
-            /**
-             * Helper function to handle deserialized arrays.
-             * @returns {Array}
-             */
+            function normalizeKey(key) {
+                if (typeof key !== "string") return key;
+            
+                // Match private: "\0ClassName\0prop"
+                const privateMatch = key.match(/^\u0000(.+)\u0000(.+)$/);
+                if (privateMatch) {
+                    const [_, className, prop] = privateMatch; // eslint-disable-line no-unused-vars
+                    return `private:${prop}`;
+                }
+            
+                // Match protected: "\0*\0prop"
+                const protectedMatch = key.match(/^\u0000\*\u0000(.+)$/);
+                if (protectedMatch) {
+                    return `protected:${protectedMatch[1]}`;
+                }
+            
+                return key;
+            }
+    
             function handleArray() {
                 const items = parseInt(readUntil(":"), 10) * 2;
                 expect("{");
-                const result = [];
+                const result = {};
                 let isKey = true;
                 let lastItem = null;
                 for (let idx = 0; idx < items; idx++) {
@@ -109,53 +110,55 @@ class PHPDeserialize2 extends Operation {
                         lastItem = item;
                         isKey = false;
                     } else {
-                        const numberCheck = lastItem.match(/[0-9]+/);
-                        if (args[0] && numberCheck && numberCheck[0].length === lastItem.length) {
-                            result.push('"' + lastItem + '": ' + item);
-                        } else {
-                            result.push(lastItem + ": " + item);
+                        let key = lastItem;
+                        if (args[0] && typeof key === "number") {
+                            key = key.toString();
                         }
+                        result[key] = item;
                         isKey = true;
                     }
                 }
                 expect("}");
                 return result;
             }
-
-
+    
             const kind = read(1).toLowerCase();
-
+    
             switch (kind) {
                 case "n":
                     expect(";");
-                    return "null";
+                    return record(null);
+    
                 case "i":
                 case "d":
                 case "b": {
                     expect(":");
                     const data = readUntil(";");
                     if (kind === "b") {
-                        return (parseInt(data, 10) !== 0);
+                        return record(parseInt(data, 10) !== 0);
                     }
-                    return data;
+                    if (kind === "i") {
+                        return record(parseInt(data, 10));
+                    }
+                    if (kind === "d") {
+                        return record(parseFloat(data));
+                    }
+                    return record(data);
                 }
-
+    
                 case "a":
                     expect(":");
-                    return "{" + handleArray() + "}";
-
+                    return record(handleArray());
+    
                 case "s": {
                     expect(":");
-                    const length = readUntil(":");
+                    const length = parseInt(readUntil(":"), 10);
                     expect("\"");
                     const value = read(length);
                     expect('";');
-                    if (args[0]) {
-                        return '"' + value.replace(/"/g, '\\"') + '"'; // lgtm [js/incomplete-sanitization]
-                    } else {
-                        return '"' + value + '"';
-                    }
+                    return record(value);
                 }
+    
                 case "o": {
                     expect(":");
                     const classNameLength = parseInt(readUntil(":"), 10);
@@ -165,36 +168,42 @@ class PHPDeserialize2 extends Operation {
                     expect(":");
                     const propertyCount = parseInt(readUntil(":"), 10);
                     expect("{");
-                
+    
                     const obj = {
                         __className: className
                     };
-                
+    
                     for (let i = 0; i < propertyCount; i++) {
                         const keyRaw = handleInput();
                         const value = handleInput();
-                
                         let key = keyRaw;
                         if (typeof keyRaw === "string" && keyRaw.startsWith('"') && keyRaw.endsWith('"')) {
                             key = keyRaw.slice(1, -1);
                         }
-                
+                        key = normalizeKey(key);
                         obj[key] = value;
                     }
-                
+    
                     expect("}");
-                    return JSON.stringify(obj);
+                    return record(obj);
                 }
-
+    
+                case "r": {
+                    expect(":");
+                    const refIndex = parseInt(readUntil(";"), 10);
+                    if (refIndex >= refStore.length || refIndex < 0) {
+                        throw new OperationError(`Invalid reference index: ${refIndex}`);
+                    }
+                    return refStore[refIndex];
+                }
+    
                 default:
                     throw new OperationError("Unknown type: " + kind);
             }
         }
-
-        const inputPart = input.split("");
-        return handleInput();
+    
+        return JSON.stringify(handleInput());
     }
-
 }
 
 export default PHPDeserialize2;
