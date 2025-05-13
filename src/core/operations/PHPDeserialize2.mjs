@@ -169,7 +169,7 @@ class PHPDeserialize2 extends Operation {
 
                     const actualByteLength = new TextEncoder().encode(str).length;
                     if (actualByteLength !== length) {
-                        throw new OperationError(`String length mismatch: expected ${length} bytes, got ${actualByteLength} for string "${str.slice(0, 30)}..."`);
+                        console.warn(`Length mismatch: declared ${length}, got ${actualByteLength} — proceeding anyway`);
                     }
 
                     return record(str);
